@@ -1,0 +1,66 @@
+Reference and type casting
+Operator	                      Meaning
+Expression // Comment	          Ignore all subsequent text
+Class :: Member	                Member of class
+Class ::~Member	                Member of class (destructor)
+:: Name	                        Global
+Structure . Field	              Field in a structure
+Pointer -> Field	              Field in referenced structure
+Name [integer]	                Array subscript
+LValue ++	                      Increment (after evaluation)
+LValue --	                      Decrement (after evaluation)
+dynamic_cast <type>(Value)	    Typecast (always performed)
+static_cast <type>(Value)	      Typecast (always performed)
+reinterpret_cast <type>(Value)	Typecast (always performed)
+const_cast <type>(Value)	      Typecast (always performed)
+
+Value operations
+Operator	            Meaning
+(type) Value	        Typecast (always performed)
+sizeof value	        Size of expression
+sizeof( type )	      Size of data type
+++ LValue	            Increment (before evaluation)
+-- LValue	            Decrement (before evaluation)
+~ Value	              Bit complement
+! Value	              Not (Boolean)
+- Value	              Unary minus
++ Value	              Unary plus
+& LValue	            Address of data type
+* Value	              Dereference
+Structure . Pointer	  Pointer to member of structure
+Pointer -> * Pointer	Pointer to member of referenced structure
+
+Arithmetic
+Operator	        Meaning
+Value * Value	    Multiplication
+Value / Value	    Division
+Value % Value	    Modulus
+Value + Value	    Addition
+Value - Value	    Subtraction
+Value << Value	  Bitwise shift left
+Value >> Value	  Bitwise shift right
+Value < Value	    Less than (comparison)
+Value <= Value	  Less than or equal (comparison)
+Value > Value	    Greater than (comparison)
+Value >= Value	  Greater than or equal (comparison)
+Value == Value	  Equal (comparison)
+Value != Value	  Not equal (comparison)
+Value & Value	    Bitwise AND
+Value ^ Value	    Bitwise XOR (exclusive OR)
+Value | Value	    Bitwise OR
+Value && Value	  Logical AND
+Value || Value	  Logical OR
+
+Assignment
+Operator	          Meaning
+LValue = Value	    Assign
+LValue *= Value	    Multiply and assign
+LValue /= Value	    Divide and assign
+LValue %= Value	    Modulo and assign
+LValue += Value	    Add and assign
+LValue -= Value	    Subtract and assign
+LValue <<= Value	  Shift left and assign
+LValue >>= Value	  Shift right and assign
+LValue &= Value	    AND and assign
+LValue |= Value	    OR and assign
+LValue ^= Value	    XOR and assign
