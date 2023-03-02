@@ -6,7 +6,6 @@ Statement_List := epsilon
 Statement := Term
 Statement := Declaration
 
-
 Declaration := Variable_Declaration ?
 Declaration := Function_Declaration
 Declaration := Type_Declaration ?
@@ -69,28 +68,28 @@ Array := OpenBracket Argument_Head CloseBracket
 
   UnaryOp :=
     Asterisk := *
-    Ampersand := &    
-    Plus := + 	 
-    Minus := - 	
+    Ampersand := &
+    Plus := +
+    Minus := -
 
   Op :=
-    Asterisk := *	   
-    ForwardSlash := / 	 
-    Percent := % 	 
-    Plus := + 	 
-    Minus := - 	 
-    LessThan := <    
-    DoubleLessThan := <<	 
-    GreaterThan := >    
-    DoubleGreaterThan := >>	 
-    LessThanOrEqual := <=	 
-    GreaterThanOrEqual := >=	 
-    DoubleEqual := ==	 
-    NotEqual := !=	 
-    Ampersand := &    
-    Upwards := ^    
-    Pipe := |    
-    DoubleAmpersand := &&	 
-    DoublePipe := ||	
+    Asterisk := *
+    ForwardSlash := /
+    Percent := %
+    Plus := +
+    Minus := -
+    LessThan := <
+    DoubleLessThan := <<
+    GreaterThan := >
+    DoubleGreaterThan := >>
+    LessThanOrEqual := <=
+    GreaterThanOrEqual := >=
+    DoubleEqual := ==
+    NotEqual := !=
+    Ampersand := &
+    Upwards := ^
+    Pipe := |
+    DoubleAmpersand := &&
+    DoublePipe := ||
     Arrow := ->
 }

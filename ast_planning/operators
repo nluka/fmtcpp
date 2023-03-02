@@ -9,10 +9,10 @@ Pointer -> Field	              Field in referenced structure
 Name [integer]	                Array subscript
 LValue ++	                      Increment (after evaluation)
 LValue --	                      Decrement (after evaluation)
-dynamic_cast <type>(Value)	    Typecast (always performed)
-static_cast <type>(Value)	      Typecast (always performed)
-reinterpret_cast <type>(Value)	Typecast (always performed)
-const_cast <type>(Value)	      Typecast (always performed)
+dynamic_cast<Type>(Value)	      Typecast (always performed)
+static_cast<Type>(Value)	      Typecast (always performed)
+reinterpret_cast<Type>(Value)	  Typecast (always performed)
+const_cast<Type>(Value)	        Typecast (always performed)
 
 Value operations
 Operator	            Meaning
