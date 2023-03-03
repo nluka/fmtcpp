@@ -112,7 +112,7 @@ enum class TokenType : uint8_t {
   //  relational:
   OPER_REL_EQ,               // ==
   OPER_REL_NOTEQ,            // !=
-  OPER_REL_LESSTHAN,         // >
+  OPER_REL_LESSTHAN,         // <
   OPER_REL_LESSTHANEQ,       // <=
   OPER_REL_GREATERTHAN,      // >
   OPER_REL_GREATERTHANEQ,    // >=
@@ -159,6 +159,8 @@ enum class TokenType : uint8_t {
   COMMENT_SINGLELINE, // //
   COMMENT_MULTILINE,  // /*
   NEWLINE,            // \n
+
+  COUNT
 };
 
 // A broad categorization of token based exclusively on its first character

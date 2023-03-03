@@ -9,15 +9,7 @@
 #include "ntest.hpp"
 #include "../src/lexer.hpp"
 #include "../src/util.hpp"
-
-template <typename Ty>
-using Vector = std::vector<Ty>;
-
-#define M_FUNCTION_ALIAS(from, to) \
-   decltype(auto) to(auto&& ... xs) \
-     { return from(std::forward<decltype(xs)>(xs)...); }
-
-M_FUNCTION_ALIAS(std::max, my_max)
+#include "../src/term.hpp"
 
 int main() {
   ntest::init();
@@ -139,18 +131,15 @@ int main() {
     ntest::assert_stdvec(expected, actual);
   }
 
-  // template class alias testing
   {
-    std::vector<int> const realVec {1, 2, 3};
-    Vector<int> const aliasedVec {1, 2, 3};
-    ntest::assert_stdvec(realVec, aliasedVec);
+    using namespace term::color;
+    auto const res = ntest::generate_report("Ctruct");
+    if (res.num_fails > 0) {
+      printf(fore::RED | back::BLACK, "%zu tests failed\n", res.num_fails);
+    } else {
+      printf(fore::GREEN | back::BLACK, "all %zu tests passed\n", res.num_passes);
+    }
   }
-
-  // template function alias testing
-  ntest::assert_int32(3, my_max(3, 2));
-
-  auto const res = ntest::generate_report("Ctruct");
-  std::cout << res.num_passes << " passed, " << res.num_fails << " failed\n";
 
   return 0;
 }

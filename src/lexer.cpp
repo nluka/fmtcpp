@@ -82,6 +82,7 @@ std::vector<lexer::Token> lexer::lex(char const *const text, size_t const textLe
         tokens.erase(lChev + 1, rChev + 1);
 
         ++i;
+        break;
       }
 
       case TokenType::LITERAL_CHAR:
