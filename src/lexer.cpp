@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <string_view>
+#include <cstring>
 #include <unordered_map>
 
 #include "lexer.hpp"

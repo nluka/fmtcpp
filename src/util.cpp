@@ -34,7 +34,7 @@ void util::escape_escape_sequences(std::string &str) {
   for (size_t i = 0; i < str.length(); ++i) {
     char *const c = str.data() + i;
 
-    for (auto const seq : sequences) {
+    for (auto const &seq : sequences) {
       if (*c == seq.first) {
         *c = seq.second;
         str.insert(i, "\\");
@@ -59,7 +59,7 @@ size_t util::find_unescaped(
     }
 
     size_t escapeCount = 0;
-    for (size_t i = pos - 1; i >= 0; --i) {
+    for (ssize_t i = pos - 1; i >= 0; --i) {
       if (str[i] == escapeCh) {
         ++escapeCount;
       } else {
@@ -129,7 +129,7 @@ std::string util::make_str(char const *const fmt, ...)
 
   va_list args;
   va_start(args, fmt);
-  int const cnt = vsnprintf(buffer, sizeof(buffer), fmt, args);
+  vsnprintf(buffer, sizeof(buffer), fmt, args);
   va_end(args);
 
   return std::string(buffer);

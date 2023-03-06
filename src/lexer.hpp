@@ -151,7 +151,7 @@ enum class TokenType : uint8_t {
   SPECIAL_ELLIPSES,      // ...
   SPECIAL_COMMA,         // ,
   SPECIAL_SEMICOLON,     // ;
-  SPECIAL_LINE_CONT,     // \
+  SPECIAL_LINE_CONT,     /* \ */
 
   // other:
   IMPLEMENTATION_DEFINED_HEADER,

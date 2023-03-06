@@ -6,7 +6,7 @@
 #include <vector>
 #include <algorithm>
 
-#include "ntest.hpp"
+#include "./ntest/ntest.hpp"
 #include "../src/lexer.hpp"
 #include "../src/util.hpp"
 #include "../src/term.hpp"

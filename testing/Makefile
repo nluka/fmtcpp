@@ -8,8 +8,8 @@ win: obj/main.obj obj/ntest.obj obj/lexer.obj obj/util.obj obj/term.obj
 obj/main.obj: main.cpp
 	$(WIN_COMPILER) $(WIN_COMPILER_FLAGS) /c main.cpp /Fo"obj/main.obj"
 
-obj/ntest.obj: ntest.cpp ntest.hpp
-	$(WIN_COMPILER) $(WIN_COMPILER_FLAGS) /c ntest.cpp /Fo"obj/ntest.obj"
+obj/ntest.obj: ./ntest/ntest.cpp ./ntest/ntest.hpp
+	$(WIN_COMPILER) $(WIN_COMPILER_FLAGS) /c ./ntest/ntest.cpp /Fo"obj/ntest.obj"
 
 obj/lexer.obj: ../src/lexer.cpp ../src/lexer.hpp
 	$(WIN_COMPILER) $(WIN_COMPILER_FLAGS) /c ../src/lexer.cpp /Fo"obj/lexer.obj"
