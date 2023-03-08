@@ -26,13 +26,6 @@ namespace lexer {
 
     PREPRO_OPER_CONCAT, // ##
 
-    // builtin preprocessor macros:
-    // PREPRO_MACRO_FILE,
-    // PREPRO_MACRO_LINE,
-    // PREPRO_MACRO_DATE,
-    // PREPRO_MACRO_TIME,
-    // PREPRO_MACRO_TIMESTAMP,
-
     // (https://en.cppreference.com/w/c/keyword)
     // keywords:
     //  types:
@@ -158,13 +151,23 @@ namespace lexer {
 
   struct Token {
     public:
+      Token(TokenType type, uint32_t const pos, uint32_t len);
+
+      TokenType type() const noexcept;
+      uint32_t position() const noexcept;
+      uint32_t length() const noexcept;
+
+      void set_type(TokenType);
+      void set_position(uint32_t);
+      void set_length(uint32_t);
+
+      bool operator==(Token const &) const noexcept;
+      bool operator!=(Token const &) const noexcept;
+      friend std::ostream &operator<<(std::ostream &, Token const &);
+
+    private:
       TokenType m_type;
       uint32_t m_pos, m_len;
-
-    public:
-      bool operator==(Token const &other) const noexcept;
-      bool operator!=(Token const &other) const noexcept;
-      friend std::ostream &operator<<(std::ostream &, Token const &);
   };
 
   std::vector<Token> tokenize_text(char const *text, size_t textLen);
@@ -208,7 +211,7 @@ namespace lexer {
 
     Token extract_token(char const *text, size_t textLen, size_t &pos);
 
-    BroadTokenType determine_token_category(char const firstChar);
+    BroadTokenType determine_token_broad_type(char const firstChar);
 
     size_t determine_token_len(char const *firstChar, BroadTokenType, size_t numRemainingChars);
 

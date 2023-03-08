@@ -6,6 +6,7 @@
 #include <fstream>
 #include <functional>
 #include <source_location>
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <type_traits>

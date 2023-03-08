@@ -1,8 +1,7 @@
+ifeq ($(OS)),Windows_NT)
+
 WIN_COMPILER=cl.exe
 WIN_COMPILER_DEBUG_FLAGS=/Zi /EHsc /nologo /std:c++20 /W4 /WX /fsanitize=address
-
-default:
-	@echo Error: please specify either 'wintest' | 'lxtest' | 'lxclean'
 
 wintest: obj/testing_main.windebug.obj obj/ntest.windebug.obj obj/lexer.windebug.obj obj/util.windebug.obj obj/term.windebug.obj
 	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) $^ /Fe"testing.exe" /Fo"obj"
@@ -23,8 +22,14 @@ obj/util.windebug.obj: src/util.cpp src/util.hpp
 obj/term.windebug.obj: src/term.cpp src/term.hpp
 	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/term.cpp /Fo"obj/term.windebug.obj"
 
+else
+
 LINUX_COMPILER=g++
 LINUX_COMPILER_DEBUG_FLAGS=-g -std=c++20 -Wall -Wpedantic -Wextra -Wconversion -Werror
+
+default:
+	mkdir -p obj/
+	make lxtest
 
 lxclean:
 	rm -r -f obj/ testing.elf
@@ -36,7 +41,7 @@ lxtest: obj/testing_main.lxdebug.o obj/ntest.lxdebug.o obj/lexer.lxdebug.o obj/u
 obj/testing_main.lxdebug.o: src/testing_main.cpp
 	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/testing_main.cpp -o obj/testing_main.lxdebug.o
 
-obj/ntest.lxdebug.o: src/ntest.cpp src/ntest.hpp src/source_loc.hpp
+obj/ntest.lxdebug.o: src/ntest.cpp src/ntest.hpp
 	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/ntest.cpp -o obj/ntest.lxdebug.o
 
 obj/lexer.lxdebug.o: src/lexer.cpp src/lexer.hpp
@@ -47,3 +52,5 @@ obj/util.lxdebug.o: src/util.cpp src/util.hpp
 
 obj/term.lxdebug.o: src/term.cpp src/term.hpp
 	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/term.cpp -o obj/term.lxdebug.o
+
+endif

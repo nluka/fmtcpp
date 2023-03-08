@@ -8,6 +8,20 @@
 #include "lexer.hpp"
 #include "util.hpp"
 
+lexer::Token::Token(TokenType const type, uint32_t const pos, uint32_t const len)
+: m_type{type},
+  m_pos{pos},
+  m_len{len}
+{}
+
+lexer::TokenType lexer::Token::type() const noexcept { return m_type; }
+uint32_t lexer::Token::position() const noexcept { return m_pos; }
+uint32_t lexer::Token::length() const noexcept { return m_len; }
+
+void lexer::Token::set_type(TokenType const v) { m_type = v; }
+void lexer::Token::set_position(uint32_t const v) { m_pos = v; }
+void lexer::Token::set_length(uint32_t const v) { m_len = v; }
+
 bool lexer::Token::operator==(lexer::Token const &other) const noexcept {
   bool const sameType = m_type == other.m_type;
   bool const samePos = m_pos == other.m_pos;
@@ -41,10 +55,10 @@ std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t co
     size_t pos = 0;
     while (pos < textLen) {
       Token const tok = detail::extract_token(text, textLen, pos);
-      if (tok.m_type == TokenType::NIL)
+      if (tok.type() == TokenType::NIL)
         break;
       else {
-        pos += tok.m_len;
+        pos += tok.length();
         tokens.push_back(tok);
       }
     }
@@ -52,7 +66,7 @@ std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t co
 
   // second pass, compression phrase
   for (size_t i = 0; i < tokens.size();) {
-    switch (tokens[i].m_type) {
+    switch (tokens[i].type()) {
       default: {
         ++i;
         break;
@@ -62,9 +76,9 @@ std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t co
       case TokenType::LITERAL_STR: {
         auto const prevToken = tokens.begin() + (i-1);
         bool const isPrefixed =
-          prevToken->m_type == TokenType::IDENTIFIER &&
-          prevToken->m_len == 1 &&
-          std::strchr("LuU", text[prevToken->m_pos]);
+          prevToken->type() == TokenType::IDENTIFIER &&
+          prevToken->length() == 1 &&
+          std::strchr("LuU", text[prevToken->position()]);
 
         if (isPrefixed) {
           //   L  'c'
@@ -76,8 +90,8 @@ std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t co
           // LITERAL_CHAR
 
           auto &currToken = tokens[i];
-          --currToken.m_pos;
-          ++currToken.m_len;
+          currToken.set_position(currToken.position() - 1);
+          currToken.set_length(currToken.length() + 1);
           tokens.erase(prevToken);
         }
 
@@ -101,7 +115,7 @@ lexer::Token lexer::detail::extract_token(
   char const *const firstChar = text + pos;
 
   lexer::detail::BroadTokenType const broadTokType =
-    lexer::detail::determine_token_category(*firstChar);
+    lexer::detail::determine_token_broad_type(*firstChar);
 
   size_t const tokLen = lexer::detail::determine_token_len(
     firstChar, broadTokType, textLen - pos);
@@ -116,7 +130,7 @@ lexer::Token lexer::detail::extract_token(
   };
 }
 
-lexer::detail::BroadTokenType lexer::detail::determine_token_category(char const firstChar) {
+lexer::detail::BroadTokenType lexer::detail::determine_token_broad_type(char const firstChar) {
   using lexer::detail::BroadTokenType;
 
   switch (firstChar) {
@@ -163,7 +177,7 @@ size_t find_numeric_literal_len(
   size_t pos = 1;
   #define CURRCHAR *(firstChar + pos)
 
-  keep_going:
+keep_going:
   while (
     pos < numCharsRemaining && (
       util::is_digit(CURRCHAR) ||
@@ -217,8 +231,19 @@ size_t lexer::detail::determine_token_len(
           return 2; // ##
       }
 
-      size_t const len = util::find_unescaped(firstChar, '\n', '\\');
-      return len;
+      size_t const firstNewlinePos = util::find_unescaped(firstChar, '\n', '\\');
+      char const *const firstOpeningMultiLineComment = std::strstr(firstChar, "/*");
+      size_t const firstOpeningMultiLineCommentPos =
+        firstOpeningMultiLineComment == nullptr
+          ? UINT32_MAX
+          : firstOpeningMultiLineComment - firstChar;
+
+      if (firstOpeningMultiLineCommentPos < firstNewlinePos) {
+        char const *const commentClose = std::strstr(firstChar, "*/");
+        return commentClose - firstChar + 2;
+      } else {
+        return firstNewlinePos;
+      }
     }
 
     case BroadTokenType::OPER_OR_LITERAL_OR_SPECIAL: {
@@ -559,13 +584,12 @@ lexer::TokenType lexer::detail::determine_token_type(
           ++directiveLen;
       }
 
-      std::string const token( // content should be "include", "define", etc.
+      std::string const directive( // content should be "include", "define", etc.
         firstAlphabeticChar,
         directiveLen
-        // len - (firstAlphabeticChar - firstChar)
       );
 
-      auto const type = s_preproDirectives.find(token);
+      auto const type = s_preproDirectives.find(directive);
       if (type == s_preproDirectives.end())
         return TokenType::NIL;
       else

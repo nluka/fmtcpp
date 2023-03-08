@@ -103,7 +103,7 @@ string ntest::internal::generate_file_pathname(
 
   pathname
     << fs::path(loc.file_name()).filename().generic_string() << '@'
-    << loc.function_name() << '(' << loc.line() << ',' << loc.column() << ')'
+    << loc.function_name() << ':' << loc.line() << ',' << loc.column()
     << '.' << extension;
 
   return pathname.str();
