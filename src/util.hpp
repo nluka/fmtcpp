@@ -21,7 +21,7 @@ size_t find_unescaped(
   char const *str,
   char searchCh,
   char escapeCh,
-  size_t offset
+  size_t startOffset = 0
 );
 
 template <typename Ty>
@@ -33,9 +33,9 @@ bool is_even(Ty const num) {
 template <typename ElemTy, size_t Length>
 consteval size_t lengthof(ElemTy (&)[Length]) { return Length; }
 
-std::fstream open_file(char const *pathname, int flags);
-std::vector<char> extract_bin_file_contents(char const *pathname);
-std::string extract_txt_file_contents(char const *pathname);
+std::fstream open_file(char const *path, int flags);
+std::vector<char> extract_bin_file_contents(char const *path);
+std::string extract_txt_file_contents(char const *path);
 
 } // namespace util
 

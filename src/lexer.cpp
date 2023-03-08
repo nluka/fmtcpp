@@ -27,8 +27,9 @@ namespace lexer {
   }
 }
 
-std::vector<lexer::Token> lexer::lex(char const *const text, size_t const textLen) {
+std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t const textLen) {
   using lexer::TokenType;
+  using lexer::Token;
 
   std::vector<Token> tokens{};
 
@@ -39,7 +40,7 @@ std::vector<lexer::Token> lexer::lex(char const *const text, size_t const textLe
   {
     size_t pos = 0;
     while (pos < textLen) {
-      Token const tok = extract_token(text, textLen, pos);
+      Token const tok = detail::extract_token(text, textLen, pos);
       if (tok.m_type == TokenType::NIL)
         break;
       else {
@@ -53,35 +54,6 @@ std::vector<lexer::Token> lexer::lex(char const *const text, size_t const textLe
   for (size_t i = 0; i < tokens.size();) {
     switch (tokens[i].m_type) {
       default: {
-        ++i;
-        break;
-      }
-
-      case TokenType::PREPRO_DIR_INCLUDE: {
-        // #include  <  stdio.h >
-        // ^^^^^^^^  ^  ^^^^^   ^
-        // |         |  |       |
-        // i     lChev  i+2  rChev
-        // ------------------------
-        // we need to replace tokens [lChev, rChev] as
-        // a single IMPLEMENTATION_DEFINED_HEADER token
-
-        auto const lChev = tokens.begin() + (i+1);
-
-        auto rChev = tokens.begin() + (i+2);
-        while (
-          rChev < tokens.end() - 1 &&
-          rChev->m_type != TokenType::OPER_REL_GREATERTHAN
-        ) ++rChev;
-
-        *lChev = {
-          TokenType::IMPLEMENTATION_DEFINED_HEADER,
-          lChev->m_pos, // pos
-          rChev->m_pos - lChev->m_pos + 1, // len
-        };
-
-        tokens.erase(lChev + 1, rChev + 1);
-
         ++i;
         break;
       }
@@ -118,7 +90,7 @@ std::vector<lexer::Token> lexer::lex(char const *const text, size_t const textLe
   return tokens;
 }
 
-lexer::Token lexer::extract_token(
+lexer::Token lexer::detail::extract_token(
   char const *const text,
   size_t const textLen,
   size_t &pos
@@ -127,40 +99,47 @@ lexer::Token lexer::extract_token(
   for (; pos < textLen && util::is_non_newline_whitespace(text[pos]); ++pos);
 
   char const *const firstChar = text + pos;
-  TokenCategory const category = lexer::determine_token_category(*firstChar);
-  size_t const len = lexer::determine_token_len(firstChar, category, textLen - pos);
-  TokenType const type = lexer::determine_token_type(firstChar, category, len);
+
+  lexer::detail::BroadTokenType const broadTokType =
+    lexer::detail::determine_token_category(*firstChar);
+
+  size_t const tokLen = lexer::detail::determine_token_len(
+    firstChar, broadTokType, textLen - pos);
+
+  lexer::TokenType const tokType = lexer::detail::determine_token_type(
+    firstChar, broadTokType, tokLen);
 
   return {
-    type,
+    tokType,
     static_cast<uint32_t>(pos),
-    static_cast<uint32_t>(len),
+    static_cast<uint32_t>(tokLen),
   };
 }
 
-lexer::TokenCategory lexer::determine_token_category(char const firstChar) {
-  using lexer::TokenCategory;
+lexer::detail::BroadTokenType lexer::detail::determine_token_category(char const firstChar) {
+  using lexer::detail::BroadTokenType;
 
   switch (firstChar) {
-    case '\n': return TokenCategory::NEWLINE;
-    case '#':  return TokenCategory::PREPRO;
-    case '.':  return TokenCategory::OPER_OR_LITERAL_OR_SPECIAL;
-    case '/':  return TokenCategory::OPER_OR_COMMENT;
+    case '\n': return BroadTokenType::NEWLINE;
+    case '#':  return BroadTokenType::PREPRO;
+    case '.':  return BroadTokenType::OPER_OR_LITERAL_OR_SPECIAL;
+    case '/':  return BroadTokenType::OPER_OR_COMMENT;
   }
 
-  if (firstChar == '_' || util::is_alphabetic(firstChar))
-    return TokenCategory::KEYWORD_OR_IDENTIFIER;
+  if (firstChar == '_' || util::is_alphabetic(firstChar)) {
+    return BroadTokenType::KEYWORD_OR_IDENTIFIER;
+  }
+  if (firstChar == '"' || firstChar == '\'' || util::is_digit(firstChar)) {
+    return BroadTokenType::LITERAL;
+  }
+  if (std::strchr("!%&*+-<=>^|~", firstChar)) {
+    return BroadTokenType::OPERATOR;
+  }
+  if (std::strchr("(),:;?[\\]{}", firstChar)) {
+    return BroadTokenType::SPECIAL;
+  }
 
-  if (firstChar == '"' || firstChar == '\'' || util::is_digit(firstChar))
-    return TokenCategory::LITERAL;
-
-  if (std::strchr("!%&*+-<=>^|~", firstChar))
-    return TokenCategory::OPERATOR;
-
-  if (std::strchr("(),:;?[\\]{}", firstChar))
-    return TokenCategory::SPECIAL;
-
-  return TokenCategory::NIL;
+  return BroadTokenType::NIL;
 }
 
 static
@@ -213,22 +192,22 @@ size_t find_numeric_literal_len(
   #undef CURRCHAR
 }
 
-size_t lexer::determine_token_len(
+size_t lexer::detail::determine_token_len(
   char const *const firstChar,
-  lexer::TokenCategory const category,
+  lexer::detail::BroadTokenType const broadTokType,
   size_t const numCharsRemaining
 ) {
-  using lexer::TokenCategory;
+  using lexer::detail::BroadTokenType;
 
   if (numCharsRemaining == 0)
     return 0;
 
-  switch (category) {
-    case TokenCategory::NEWLINE:
-    case TokenCategory::SPECIAL:
+  switch (broadTokType) {
+    case BroadTokenType::NEWLINE:
+    case BroadTokenType::SPECIAL:
       return 1;
 
-    case TokenCategory::PREPRO: {
+    case BroadTokenType::PREPRO: {
       if (numCharsRemaining == 1)
         return 1;
 
@@ -238,28 +217,11 @@ size_t lexer::determine_token_len(
           return 2; // ##
       }
 
-      char const *lastChar = firstChar + 1;
-
-      // advance `lastChar` to first non whitespace character
-      while (
-        static_cast<size_t>(lastChar - firstChar) <= numCharsRemaining &&
-        util::is_non_newline_whitespace(*lastChar)
-      ) ++lastChar;
-
-      if (!util::is_alphabetic(*lastChar)) {
-        return 0; // error
-      }
-
-      // advance `lastChar` to first non-alphabetic character
-      while (
-        static_cast<size_t>(lastChar - firstChar) <= numCharsRemaining &&
-        util::is_alphabetic(*lastChar)
-      ) ++lastChar;
-
-      return lastChar - firstChar;
+      size_t const len = util::find_unescaped(firstChar, '\n', '\\');
+      return len;
     }
 
-    case TokenCategory::OPER_OR_LITERAL_OR_SPECIAL: {
+    case BroadTokenType::OPER_OR_LITERAL_OR_SPECIAL: {
       if (numCharsRemaining == 1)
         return 1; // member selection operator
 
@@ -286,7 +248,7 @@ size_t lexer::determine_token_len(
         return lastChar - firstChar;
     }
 
-    case TokenCategory::OPER_OR_COMMENT: {
+    case BroadTokenType::OPER_OR_COMMENT: {
       if (numCharsRemaining == 1)
         return 1;
 
@@ -322,7 +284,7 @@ size_t lexer::determine_token_len(
       }
     }
 
-    case TokenCategory::KEYWORD_OR_IDENTIFIER: {
+    case BroadTokenType::KEYWORD_OR_IDENTIFIER: {
       for (size_t pos = 1; pos <= numCharsRemaining; ++pos) {
         char const c = *(firstChar + pos);
         if (!util::is_alphabetic(c) && !util::is_digit(c) && c != '_')
@@ -331,7 +293,7 @@ size_t lexer::determine_token_len(
       return numCharsRemaining;
     }
 
-    case TokenCategory::OPERATOR: {
+    case BroadTokenType::OPERATOR: {
       if (numCharsRemaining == 1 || *firstChar == '~') {
         return 1;
       }
@@ -395,7 +357,7 @@ size_t lexer::determine_token_len(
       return 0;
     }
 
-    case TokenCategory::LITERAL: {
+    case BroadTokenType::LITERAL: {
       if (numCharsRemaining == 1) {
         return 1;
       } else if (*firstChar == '\'' || *firstChar == '"') {
@@ -418,12 +380,12 @@ size_t lexer::determine_token_len(
   }
 }
 
-lexer::TokenType lexer::determine_token_type(
+lexer::TokenType lexer::detail::determine_token_type(
   char const *const firstChar,
-  lexer::TokenCategory const category,
+  lexer::detail::BroadTokenType const broadTokType,
   size_t const len
 ) {
-  using lexer::TokenCategory;
+  using lexer::detail::BroadTokenType;
   using lexer::TokenType;
 
   static std::unordered_map<std::string, TokenType> const s_preproDirectives {
@@ -530,15 +492,15 @@ lexer::TokenType lexer::determine_token_type(
     { "\\", TokenType::SPECIAL_LINE_CONT },
   };
 
-  switch (category) {
+  switch (broadTokType) {
     default:
-    case TokenCategory::NIL:
+    case BroadTokenType::NIL:
       return TokenType::NIL;
 
-    case TokenCategory::NEWLINE:
+    case BroadTokenType::NEWLINE:
       return TokenType::NEWLINE;
 
-    case TokenCategory::OPER_OR_LITERAL_OR_SPECIAL: {
+    case BroadTokenType::OPER_OR_LITERAL_OR_SPECIAL: {
       if (len == 1)
         return TokenType::OPER_DOT;
       if (len == 3 && std::strcmp(firstChar, "...") == 0)
@@ -546,7 +508,7 @@ lexer::TokenType lexer::determine_token_type(
       return TokenType::LITERAL_NUM;
     }
 
-    case TokenCategory::OPER_OR_COMMENT: {
+    case BroadTokenType::OPER_OR_COMMENT: {
       if (len == 1)
         return TokenType::OPER_DIV;
 
@@ -563,7 +525,7 @@ lexer::TokenType lexer::determine_token_type(
       }
     }
 
-    case TokenCategory::LITERAL: {
+    case BroadTokenType::LITERAL: {
       switch (*firstChar) {
         case '"': return TokenType::LITERAL_STR;
         case '\'': return TokenType::LITERAL_CHAR;
@@ -571,7 +533,7 @@ lexer::TokenType lexer::determine_token_type(
       }
     }
 
-    case TokenCategory::PREPRO: {
+    case BroadTokenType::PREPRO: {
       if (len == 2)
         return TokenType::PREPRO_OPER_CONCAT;
 
@@ -590,9 +552,17 @@ lexer::TokenType lexer::determine_token_type(
       // |   firstAlphabeticChar
       // firstChar
 
-      std::string const token( // content is "define"
+      size_t directiveLen = 1;
+      {
+        char const *p = firstAlphabeticChar + 1;
+        while (util::is_alphabetic(*p++))
+          ++directiveLen;
+      }
+
+      std::string const token( // content should be "include", "define", etc.
         firstAlphabeticChar,
-        len - (firstAlphabeticChar - firstChar)
+        directiveLen
+        // len - (firstAlphabeticChar - firstChar)
       );
 
       auto const type = s_preproDirectives.find(token);
@@ -602,9 +572,9 @@ lexer::TokenType lexer::determine_token_type(
         return type->second;
     }
 
-    case TokenCategory::KEYWORD_OR_IDENTIFIER:
-    case TokenCategory::OPERATOR:
-    case TokenCategory::SPECIAL: {
+    case BroadTokenType::KEYWORD_OR_IDENTIFIER:
+    case BroadTokenType::OPERATOR:
+    case BroadTokenType::SPECIAL: {
       std::string const token(firstChar, len);
       auto const type = s_keywordsOperatorsSpecialSymbols.find(token);
       if (type == s_keywordsOperatorsSpecialSymbols.end())

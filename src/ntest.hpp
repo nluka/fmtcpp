@@ -5,11 +5,10 @@
 #include <concepts>
 #include <fstream>
 #include <functional>
+#include <source_location>
 #include <sstream>
 #include <string>
 #include <type_traits>
-#include <filesystem>
-#include "source_location"
 
 namespace ntest {
 
@@ -36,8 +35,7 @@ namespace concepts {
   };
 
   template <typename Ty>
-  concept derives_from_std_exception = requires(Ty)
-  {
+  concept derives_from_std_exception = requires(Ty) {
     std::derived_from<std::exception, Ty>;
   };
 

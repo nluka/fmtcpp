@@ -1,9 +1,15 @@
 .vscode/
+obj/
+
 *.obj
 *.exe
 *.pdb
 *.ilk
 *.exp
 *.lib
-testing/*.md
-obj/
+*.elf
+
+# testing stuff
+*.expected
+*.actual
+Ctruct.md

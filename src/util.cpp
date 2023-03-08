@@ -49,7 +49,7 @@ size_t util::find_unescaped(
   char const *const str,
   char const searchCh,
   char const escapeCh,
-  size_t const offset = 0
+  size_t const offset
 ) {
   size_t const len = strlen(str);
 
@@ -58,14 +58,15 @@ size_t util::find_unescaped(
       continue;
     }
 
-    size_t escapeCount = 0;
-    for (ssize_t i = pos - 1; i >= 0; --i) {
-      if (str[i] == escapeCh) {
-        ++escapeCount;
-      } else {
-        break;
-      }
-    }
+    size_t const escapeCount = std::count(str, str + pos - 1, escapeCh);
+    // size_t escapeCount = 0;
+    // for (size_t i = pos - 1; i > 0; --i) {
+    //   if (str[i] == escapeCh) {
+    //     ++escapeCount;
+    //   } else {
+    //     break;
+    //   }
+    // }
 
     bool const isEscaped = !is_even(escapeCount);
     if (!isEscaped) {
@@ -96,17 +97,17 @@ std::fstream util::open_file(char const *const path, int const flags) {
   return file;
 }
 
-std::vector<char> util::extract_bin_file_contents(char const *const pathname) {
-  std::fstream file = util::open_file(pathname, std::ios::binary | std::ios::in);
-  auto const fileSize = std::filesystem::file_size(pathname);
+std::vector<char> util::extract_bin_file_contents(char const *const path) {
+  std::fstream file = util::open_file(path, std::ios::binary | std::ios::in);
+  auto const fileSize = std::filesystem::file_size(path);
   std::vector<char> vec(fileSize);
   file.read(vec.data(), fileSize);
   return vec;
 }
 
-std::string util::extract_txt_file_contents(char const *const pathname) {
-  std::fstream file = util::open_file(pathname, std::ios::in);
-  auto const fileSize = std::filesystem::file_size(pathname);
+std::string util::extract_txt_file_contents(char const *const path) {
+  std::fstream file = util::open_file(path, std::ios::in);
+  auto const fileSize = std::filesystem::file_size(path);
 
   std::string content{};
   content.reserve(fileSize);
