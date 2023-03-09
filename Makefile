@@ -31,7 +31,7 @@ default:
 	mkdir -p obj/
 	make lxtest
 
-lxclean:
+clean:
 	rm -r -f obj/ testing.elf
 
 lxtest: obj/testing_main.lxdebug.o obj/ntest.lxdebug.o obj/lexer.lxdebug.o obj/util.lxdebug.o obj/term.lxdebug.o

@@ -1,95 +1,232 @@
-// Code snips are placed as example for a production
 
-Program := Statement_List $
-Statement_List := Statement Statement_List
-Statement_List := epsilon
-Statement := Term
-Statement := Declaration
+// https://alx71hub.github.io/hcb/ with modifications to remove right recursion
+// `opt` specifies that the production is optional (left associative)
+// Productions start with an uppercase letter, terminals are either symbols or start with lowercase letters (keywords)
 
-Declaration := Variable_Declaration ?
-Declaration := Function_Declaration
-Declaration := Type_Declaration ?
+Program := DeclarationSeq $
 
-auto func(int a, string &d, vector<string> a, string g = "hello") -> int { int a; return a; }
-Function_Declaration := Type Identifier OpenParen Parameter_Head CloseParen Trailing_Return Body
-Function_Declaration := Type Identifier OpenParen Parameter_Head CloseParen Trailing_Return SemiColon
+DeclarationSeq := DeclarationSeq Declaration
+DeclarationSeq := Declaration
 
-int a, string &d, vector<string> a, string g = "hello"
-Parameter_Head := epsilon
-Parameter_Head := Parameter Parameter_List
-Parameter_List := epsilon
-Parameter_List := Comma Parameter Parameter_Tail
-Parameter := Type Identifier
-Parameter := Type Identifier Equal Identifier
+{ // block declaration
+  Declaration := BlockDeclaration
 
--> int
-Trailing_Return := epsilon
-Trailing_Return := Arrow Type
+  BlockDeclaration :=
+    SimpleDeclaration
+    AsmDefinition
+    NamespaceAliasDefinition
+    UsingDeclaration
+    UsingDirective
+    StaticAssertDeclaration
+    AliasDeclaration
+    OpaqueEnumDeclaration
+  
+  { // simple declaration
+    SimpleDeclaration := AttributeSpecifierSeq `opt` DeclSpecifierSeq `opt` InitDeclaratorSeq `opt` ;
+  }
+}
 
-{ int a; return a; }
-Body := epsilon
-Body := OpenBrace Statement_List CloseBrace
+{ // function definition
+  Declaration := FunctionDefinition
 
-functionName("thing", 1234)
-Function_Call := Identifier OpenParen Argument_Head CloseParen
+  FunctionDefinition :=
+    AttributeSpecifierSeq `opt` DeclSpecifierSeq `opt` Declarator FunctionBody
+    AttributeSpecifierSeq `opt` DeclSpecifierSeq `opt` Declarator = default ;
+    AttributeSpecifierSeq `opt` DeclSpecifierSeq `opt` Declarator = delete ;
 
-"thing", 1234
-Argument_Head := epsilon
-Argument_Head := Argument Argument_List
-Argument_List := epsilon
-Argument_List := Comma Argument Argument_Tail
-Argument := Term
-Argument := Array
+  FunctionBody :=
+    CtorInitializer `opt` CompoundStatement
+    FunctionTryBlock
+}
 
-("hello") + (thing) - 23 * *yes
-Term := OpenParen Term CloseParen
-Term := Term Op Term
-Term := Identifier
-Term := Function_Call
-Term := UnaryOp Term
+{ // template declaration
+  Declaration := TemplateDeclaration
 
-Identifier := identifier
-Identifier := number
-Identifier := stringLiteral
-Identifier := characterLiteral
+  TemplateDeclaration := template < TemplateParameterList > Declaration
 
-["thing", [1234, 3, []]]
-Array := OpenBracket Argument_Head CloseBracket
+  TemplateParameterList :=
+    TemplateParameter
+    TemplateParameterList , TemplateParameter
+  
+  { // template parameter
+    TemplateParameter :=
+      TypeParameter
+      ParameterDeclaration
 
-"####### Symbols ########"
-"////////////////////////"
-{
-  OpenParen := '('
-  OpenBrace := '{'
-  OpenBracket := '['
-  CloseParen := ')'
-  CloseBrace := ']'
-  CloseBracket := '}'
+    TypeParameter :=
+      class ... `opt` Identifier `opt`
+      class Identifier `opt` = TypeId
+      typename ... `opt` Identifier `opt`
+      typename Identifier `opt` = TypeId
+      template < TemplateParameterList > class ... `opt` Identifier `opt`
+      template < TemplateParameterList > class Identifier `opt` = IdExpression
+  }
+}
 
-  UnaryOp :=
-    Asterisk := *
-    Ampersand := &
-    Plus := +
-    Minus := -
+{ // explicit instantiation
+  Declaration := ExplicitInstantiation
 
-  Op :=
-    Asterisk := *
-    ForwardSlash := /
-    Percent := %
-    Plus := +
-    Minus := -
-    LessThan := <
-    DoubleLessThan := <<
-    GreaterThan := >
-    DoubleGreaterThan := >>
-    LessThanOrEqual := <=
-    GreaterThanOrEqual := >=
-    DoubleEqual := ==
-    NotEqual := !=
-    Ampersand := &
-    Upwards := ^
-    Pipe := |
-    DoubleAmpersand := &&
-    DoublePipe := ||
-    Arrow := ->
+  ExplicitInstantiation := extern `opt` template Declaration
+}
+
+{ // explicit specialization
+  Declaration := ExplicitSpecialization
+
+  ExplicitSpecialization :=	template < > Declaration
+}
+
+{ // linkage specification
+  Declaration := LinkageSpecification
+
+  LinkageSpecification :=	 	 
+    extern StringLiteral { DeclarationSeq `opt` }
+    extern StringLiteral Declaration
+}
+
+{ // namespace definition
+  Declaration := NamespaceDefinition
+
+  NamespaceDefinition :=	 	 
+    NamedNamespaceDefinition
+    UnnamedNamespaceDefinition
+
+  NamedNamespaceDefinition :=
+    OriginalNamespaceDefinition
+    ExtensionNamespaceDefinition
+
+  OriginalNamespaceDefinition :=
+    inline `opt` namespace Identifier { NamespaceBody }
+
+  ExtensionNamespaceDefinition :=
+    inline `opt` namespace OriginalNamespaceName { NamespaceBody }
+
+  UnnamedNamespaceDefinition :=
+    inline `opt` namespace { NamespaceBody }
+
+  NamespaceBody :=
+    DeclarationSeq `opt`
+}
+
+{ // empty declaration
+  Declaration := EmptyDeclaration
+
+  EmptyDeclaration := ;
+}
+
+{ // attribute declaration
+  Declaration := AttributeDeclaration
+
+  AttributeDeclaration := AttributeSpecifierSeq ;
+}
+
+{ // attribute specifier seq
+  AttributeSpecifierSeq :=
+    AttributeSpecifier
+    AttributeSpecifierSeq AttributeSpecifier
+
+  AttributeSpecifier :=
+    [ [ AttributeList ] ]
+    AlignmentSpecifier
+
+  AlignmentSpecifier :=
+    alignas ( TypeId ... `opt` )
+    alignas ( AssignmentExpression ...`opt` )
+
+  AttributeList :=
+    Attribute `opt`
+    AttributeList , Attribute `opt`
+    Attribute ...
+    AttributeList , Attribute ...
+
+  Attribute :=
+    AttributeToken AttributeArgumentClause `opt`
+
+  AttributeToken :=
+    Identifier
+    AttributeScopedToken
+
+  AttributeScopedToken :=
+    AttributeNamespace :: Identifier
+
+  AttributeNamespace :=
+    Identifier
+
+  AttributeArgumentClause :=
+    ( BalancedTokenSeq )
+
+  BalancedTokenSeq :=
+    BalancedToken
+    BalancedTokenSeq BalancedToken
+
+  BalancedToken :=
+    ( BalancedTokenSeq )
+    [ BalancedTokenSeq ]
+    { BalancedTokenSeq }
+    Token  // except a parenthesis, a bracket, or a brace
+}
+
+{ // decl specifier seq
+  DeclSpecifierSeq :=
+   	AttributeSpecifierSeq `opt` DeclSpecifier  
+    DeclSpecifierSeq DeclSpecifier
+
+  DeclSpecifier :=
+    StorageClassSpecifier
+    TypeSpecifier
+    FunctionSpecifier
+    friend
+    typedef
+    constexpr
+
+}
+
+{ // init declarator seq
+  InitDeclaratorSeq :=
+    InitDeclarator
+    InitDeclaratorSeq , InitDeclarator
+
+  InitDeclarator :=
+    Declarator Initializer `opt`
+
+  Declarator :=
+    PtrDeclarator
+    NoptrDeclarator ParametersAndQualifiers TrailingReturnType
+
+  PtrDeclarator :=
+    NoptrDeclarator
+    PtrDeclarator PtrOperator
+
+  NoptrDeclarator :=
+    DeclaratorId AttributeSpecifierSeq `opt`
+    NoptrDeclarator ParametersAndQualifiers
+    NoptrDeclarator [ ConstantExpression `opt` ] AttributeSpecifierSeq `opt`
+    ( PtrDeclarator )
+
+  ParametersAndQualifiers :=
+    ( ParameterDeclarationClause ) AttributeSpecifierSeq `opt` CvQualifierSeq `opt` RefQualifier `opt` ExceptionSpecification `opt`
+
+  TrailingReturnType :=
+    -> TrailingTypeSpecifierSeq AbstractDeclarator `opt`
+
+  PtrOperator :=
+    * AttributeSpecifierSeq `opt` CvQualifierSeq `opt`
+    & AttributeSpecifierSeq `opt`
+    && AttributeSpecifierSeq `opt`
+    :: `opt` NestedNameSpecifier * AttributeSpecifierSeq `opt` CvQualifierSeq `opt`
+
+  CvQualifierSeq :=
+    CvQualifier
+    CvQualifierSeq CvQualifier
+
+  CvQualifier :=
+    const
+    volatile
+
+  RefQualifier :=
+    &
+    &&
+
+  DeclaratorId :=
+    ... `opt` IdExpression
+    :: `opt` NestedNameSpecifier `opt` ClassName
 }
