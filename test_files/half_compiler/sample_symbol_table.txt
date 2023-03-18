@@ -1,0 +1,33 @@
+file
+  name|kind|
+  ...
+
+primitives.hpp
+  u8|TYPEDEF|
+  u16|TYPEDEF|
+  u32|TYPEDEF|
+  u64|TYPEDEF|
+  i8|TYPEDEF|
+  i16|TYPEDEF|
+  i32|TYPEDEF|
+  i64|TYPEDEF|
+  f32|TYPEDEF|
+  f64|TYPEDEF|
+
+math1.hpp
+  PI|MACRO|
+  math1|NAMESPACE|
+  math1::types|NAMESPACE|
+  math1::types::Point2D|STRUCT|
+  math1::types::Point3D|STRUCT|
+  math1::types::Point2Di32|USING|
+  math1::types2|NAMESPACE|
+  math1::add|FUNCTION|
+
+math2.hpp
+  real32|TYPEDEF|
+  real64|TYPEDEF|
+  math2|NAMESPACE|
+  PI|MACRO|
+  math2::Hashable|CONCEPT|
+  math2::add_hashable|FUNCTION|
