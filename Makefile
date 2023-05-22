@@ -1,56 +1,53 @@
-ifeq ($(OS)),Windows_NT)
+# Compiler
+CXX = g++
 
-WIN_COMPILER=cl.exe
-WIN_COMPILER_DEBUG_FLAGS=/Zi /EHsc /nologo /std:c++20 /W4 /WX /fsanitize=address
+# Default build type
+BUILD_TYPE ?= release
 
-wintest: obj/testing_main.windebug.obj obj/ntest.windebug.obj obj/lexer.windebug.obj obj/util.windebug.obj obj/term.windebug.obj
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) $^ /Fe"testing.exe" /Fo"obj"
-	./testing.exe
-
-obj/testing_main.windebug.obj: src/testing_main.cpp
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/testing_main.cpp /Fo"obj/testing_main.windebug.obj"
-
-obj/ntest.windebug.obj: src/ntest.cpp src/ntest.hpp
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/ntest.cpp /Fo"obj/ntest.windebug.obj"
-
-obj/lexer.windebug.obj: src/lexer.cpp src/lexer.hpp
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/lexer.cpp /Fo"obj/lexer.windebug.obj"
-
-obj/util.windebug.obj: src/util.cpp src/util.hpp
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/util.cpp /Fo"obj/util.windebug.obj"
-
-obj/term.windebug.obj: src/term.cpp src/term.hpp
-	$(WIN_COMPILER) $(WIN_COMPILER_DEBUG_FLAGS) /c src/term.cpp /Fo"obj/term.windebug.obj"
-
+# Flags
+CXXFLAGS = -MMD -MP -std=c++20 -Werror -Wall -Wextra -Wpedantic -Wformat -Wmissing-include-dirs -Wuninitialized -Wunreachable-code -Wshadow -Wconversion -Wsign-conversion -Wredundant-decls -Winit-self -Wswitch-default -Wfloat-equal -Wunused-parameter -MMD -MP
+ifeq ($(BUILD_TYPE),debug)
+	CXXFLAGS += -g
+	BIN_DIR = bin/debug
+else ifeq ($(BUILD_TYPE),release)
+	CXXFLAGS += -O2
+	BIN_DIR = bin/release
 else
+	$(error BUILD_TYPE $(BUILD_TYPE) not supported)
+endif
 
-LINUX_COMPILER=g++
-LINUX_COMPILER_DEBUG_FLAGS=-g -std=c++20 -Wall -Wpedantic -Wextra -Wconversion -Werror
+LDFLAG = -lstdc++
 
-default:
-	mkdir -p obj/
-	make lxtest
+# Directories
+SRC_DIR = src
+
+# Source and object files
+SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BIN_DIR)/%.o, $(SRCS))
+DEPS = $(OBJS:.o=.d)
+
+# Rules
+.PHONY: default toolchain clean
+
+core = $(addprefix $(BIN_DIR)/, lexer.o term.o util.o)
+
+default: $(core) $(BIN_DIR)/ntest.o
+	@make tests
+
+tests: $(core) $(BIN_DIR)/ntest.o $(BIN_DIR)/testing_main.o
+	@$(CXX) $(CXXFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAG)
+	@echo 'compiling tests...'
+
+$(BIN_DIR):
+	@mkdir -p $(BIN_DIR)
+
+$(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BIN_DIR)
+	@echo 'compiling [$<]...'
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -r -f obj/ testing.elf
+	rm -r -f bin/debug bin/release
+	find . -name "*.d" -type f -delete
 
-lxtest: obj/testing_main.lxdebug.o obj/ntest.lxdebug.o obj/lexer.lxdebug.o obj/util.lxdebug.o obj/term.lxdebug.o
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) $^ -o testing.elf
-	./testing.elf
-
-obj/testing_main.lxdebug.o: src/testing_main.cpp
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/testing_main.cpp -o obj/testing_main.lxdebug.o
-
-obj/ntest.lxdebug.o: src/ntest.cpp src/ntest.hpp
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/ntest.cpp -o obj/ntest.lxdebug.o
-
-obj/lexer.lxdebug.o: src/lexer.cpp src/lexer.hpp
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/lexer.cpp -o obj/lexer.lxdebug.o
-
-obj/util.lxdebug.o: src/util.cpp src/util.hpp
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/util.cpp -o obj/util.lxdebug.o
-
-obj/term.lxdebug.o: src/term.cpp src/term.hpp
-	$(LINUX_COMPILER) $(LINUX_COMPILER_DEBUG_FLAGS) -c src/term.cpp -o obj/term.lxdebug.o
-
-endif
+# Include the generated .d files
+-include $(DEPS)

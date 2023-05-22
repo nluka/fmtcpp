@@ -1,7 +1,7 @@
 // various utility/helper functions
 
-#ifndef CTRUCT_UTIL_HPP
-#define CTRUCT_UTIL_HPP
+#ifndef FMTCPP_UTIL_HPP
+#define FMTCPP_UTIL_HPP
 
 #include <fstream>
 #include <string>
@@ -10,6 +10,8 @@
 namespace util {
 
 std::string make_str(char const *fmt, ...);
+
+int print_err(char const *fmt, ...);
 
 bool is_alphabetic(char);
 bool is_digit(char);
@@ -24,19 +26,19 @@ size_t find_unescaped(
   size_t startOffset = 0
 );
 
-template <typename Ty>
-bool is_even(Ty const num) {
-  return num % 2 == 0;
-}
+std::fstream open_file(char const *path, int flags);
+std::vector<char> extract_bin_file_contents(char const *path);
+std::string extract_txt_file_contents(char const *path);
 
 // Returns the size of a static C-style array at compile time.
 template <typename ElemTy, size_t Length>
 consteval size_t lengthof(ElemTy (&)[Length]) { return Length; }
 
-std::fstream open_file(char const *path, int flags);
-std::vector<char> extract_bin_file_contents(char const *path);
-std::string extract_txt_file_contents(char const *path);
+template <typename Ty>
+bool is_even(Ty const num) {
+  return num % 2 == 0;
+}
 
 } // namespace util
 
-#endif // CTRUCT_UTIL_HPP
+#endif // FMTCPP_UTIL_HPP

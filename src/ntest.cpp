@@ -1,24 +1,19 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cassert>
+
+#ifdef __GNUC__
+# include <cxxabi.h>
+#endif
 
 #include "ntest.hpp"
-
-template <typename Ty, size_t Length>
-consteval
-size_t lengthof(Ty (&)[Length])
-{
-  return Length;
-}
 
 namespace fs = std::filesystem;
 using std::string;
@@ -27,46 +22,97 @@ using std::source_location;
 using std::stringstream;
 using std::runtime_error;
 using std::fstream;
-using ntest::internal::assertion;
 
 // STATE:
-static vector<assertion> s_failed_assertions{};
-static vector<assertion> s_passed_assertions{};
+static vector<ntest::assertion> s_failed_assertions{};
+static vector<ntest::assertion> s_passed_assertions{};
 
-// CONFIGURABLE SETTINGS:
+ntest::assertion::serialized ntest::assertion::extract_serialized_values(bool const passed) const
+{
+  char const *const type = serialized_vals.data();
+
+  size_t expected_pos = serialized_vals.find_first_of('\0');
+  assert(expected_pos != std::string::npos);
+  ++expected_pos;
+  char const *const expected = serialized_vals.data() + expected_pos;
+
+  char const *actual;
+  if (passed)
+  {
+    actual = nullptr;
+  }
+  else
+  {
+    size_t actual_pos = serialized_vals.find_first_of('\0', expected_pos);
+    assert(actual_pos != std::string::npos);
+    ++actual_pos;
+    actual = serialized_vals.data() + actual_pos;
+  }
+
+  return {
+    type,
+    expected,
+    actual
+  };
+}
+
 static size_t s_max_str_preview_len = 20;
-static size_t s_max_arr_preview_len = 10;
-
-static std::pair<char, char> constexpr s_special_chars[] {
-  { '\a', 'a' },
-  { '\b', 'b' },
-  { '\f', 'f' },
-  { '\n', 'n' },
-  { '\r', 'r' },
-  { '\t', 't' },
-  { '\v', 'v' },
-  { '\0', '0' },
-};
-
 void ntest::config::set_max_str_preview_len(size_t const len)
 {
   s_max_str_preview_len = len;
 }
 
+static size_t s_max_arr_preview_len = 10;
 void ntest::config::set_max_arr_preview_len(size_t const len)
 {
   s_max_arr_preview_len = len;
 }
 
+static bool s_show_column_numbers = false;
+void ntest::config::set_show_column_numbers(bool const b)
+{
+  s_show_column_numbers = b;
+}
+
+using ntest::internal::special_chars_table_t;
+
+special_chars_table_t const &ntest::internal::special_chars_serial_file()
+{
+  static special_chars_table_t const s_special_chars_file {
+    { '\a', 'a' },
+    { '\b', 'b' },
+    { '\f', 'f' },
+    { '\n', 'n' },
+    { '\r', 'r' },
+    { '\t', 't' },
+    { '\v', 'v' },
+    { '\0', '0' },
+  };
+  return s_special_chars_file;
+}
+
+special_chars_table_t const &ntest::internal::special_chars_markdown_preview()
+{
+  static special_chars_table_t const s_special_markdown_chars {
+    { '\a', 'a' },
+    { '\b', 'b' },
+    { '\f', 'f' },
+    { '\n', 'n' },
+    { '\r', 'r' },
+    { '\t', 't' },
+    { '\v', 'v' },
+    { '\0', '0' },
+    { '`', '`' },
+  };
+  return s_special_markdown_chars;
+}
+
 char const *ntest::internal::preview_style()
 {
   return
-    "background-color: lightgray;"
     "border: 1px solid darkgray;"
-    "border-radius: 5px;"
-    "color: black;"
     "font-family: monospace;"
-    "padding: 1px;"
+    "padding: 2px;"
     "white-space: pre-wrap;"
   ;
 }
@@ -82,51 +128,68 @@ size_t ntest::internal::max_arr_preview_len()
 }
 
 void ntest::internal::register_failed_assertion(
-  stringstream &&ss,
+  stringstream const &ss,
   source_location const &loc)
 {
   s_failed_assertions.emplace_back(ss.str(), loc);
 }
 
 void ntest::internal::register_passed_assertion(
-  stringstream &&ss,
+  stringstream const &ss,
   source_location const &loc)
 {
   s_passed_assertions.emplace_back(ss.str(), loc);
 }
 
-string ntest::internal::generate_file_pathname(
+string ntest::internal::make_serialized_file_path(
   source_location const &loc,
   char const *const extension)
 {
-  stringstream pathname{};
+  stringstream path{};
 
-  pathname
-    << fs::path(loc.file_name()).filename().generic_string() << '@'
-    << loc.function_name() << ':' << loc.line() << ',' << loc.column()
-    << '.' << extension;
+  path
+    << fs::path(loc.file_name()).filename().generic_string()
+    // Windows doesn't like : so use _ instead
+    << '_' << loc.line();
 
-  return pathname.str();
+  if (s_show_column_numbers)
+    path << ',' << loc.column();
+
+  path << '.' << extension;
+
+  return path.str();
 }
 
 void ntest::internal::throw_if_file_not_open(
   fstream const &file,
-  char const *const pathname)
+  char const *const path)
 {
-  if (!file.is_open())
+  if (!file)
   {
     stringstream err{};
-    err << "failed to open file \"" << pathname << '"';
+    err << "failed to open file \"" << path << '"';
     throw runtime_error(err.str());
   }
 }
 
 /*
-  Compilers love generating very ugly typeids, this cleans them up.
+  MSVC loves generating very ugly typeids, this cleans them up.
+  g++ loves mangling names, this undoes that.
 */
 string ntest::internal::beautify_typeid_name(char const *const name)
 {
   using std::regex;
+
+  string pretty_name;
+#ifdef __GNUC__
+  int status;
+  char const *const unmangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+  assert(status == 0);
+  pretty_name = unmangled;
+  free((void *)unmangled);
+#else
+  pretty_name = name;
+#endif
 
   static std::pair<regex, char const *> const operations[] {
     { regex(" +([<>])"), "$1" },
@@ -134,7 +197,6 @@ string ntest::internal::beautify_typeid_name(char const *const name)
     { regex(" {2,}"), " " },
   };
 
-  string pretty_name = name;
   for (auto const &[regex, replacement] : operations)
     pretty_name = std::regex_replace(pretty_name, regex, replacement);
 
@@ -143,7 +205,7 @@ string ntest::internal::beautify_typeid_name(char const *const name)
 
 template <typename Ty>
 requires std::integral<Ty>
-void assert_integral(
+bool assert_integral(
   Ty const expected,
   Ty const actual,
   source_location const &loc)
@@ -152,18 +214,20 @@ void assert_integral(
 
   stringstream serialized_vals{};
   serialized_vals
-    << ntest::internal::beautify_typeid_name(typeid(expected).name())
-    << " | " << std::to_string(expected);
+    << ntest::internal::beautify_typeid_name(typeid(expected).name()) << '\0'
+    << std::to_string(expected) << '\0';
 
   if (passed)
   {
-    ntest::internal::register_passed_assertion(std::move(serialized_vals), loc);
+    ntest::internal::register_passed_assertion(serialized_vals, loc);
   }
   else // failed
   {
-    serialized_vals << " | " << std::to_string(actual);
-    ntest::internal::register_failed_assertion(std::move(serialized_vals), loc);
+    serialized_vals << std::to_string(actual) << '\0';
+    ntest::internal::register_failed_assertion(serialized_vals, loc);
   }
+
+  return passed;
 }
 
 static
@@ -176,7 +240,7 @@ char const *bool_to_string(bool const b)
   }
 }
 
-void ntest::assert_bool(
+bool ntest::assert_bool(
   bool const expected,
   bool const actual,
   std::source_location const loc)
@@ -184,81 +248,140 @@ void ntest::assert_bool(
   bool const passed = actual == expected;
 
   stringstream serialized_vals{};
-  serialized_vals << "bool | " << bool_to_string(expected);
+  serialized_vals << "bool" << '\0' << bool_to_string(expected) << '\0';
 
   if (passed)
   {
-    ntest::internal::register_passed_assertion(std::move(serialized_vals), loc);
+    ntest::internal::register_passed_assertion(serialized_vals, loc);
   }
   else // failed
   {
-    serialized_vals << " | " << bool_to_string(actual);
-    ntest::internal::register_failed_assertion(std::move(serialized_vals), loc);
+    serialized_vals << bool_to_string(actual) << '\0';
+    ntest::internal::register_failed_assertion(serialized_vals, loc);
   }
+
+  return passed;
 }
 
-void ntest::assert_int8(
+bool ntest::assert_int8(
   int8_t const expected,
   int8_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_uint8(
+bool ntest::assert_uint8(
   uint8_t const expected,
   uint8_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_int16(
+bool ntest::assert_int16(
   int16_t const expected,
   int16_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_uint16(
+bool ntest::assert_uint16(
   uint16_t const expected,
   uint16_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_int32(
+bool ntest::assert_int32(
   int32_t const expected,
   int32_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_uint32(
+bool ntest::assert_uint32(
   uint32_t const expected,
   uint32_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_int64(
+bool ntest::assert_int64(
   int64_t const expected,
   int64_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
 }
 
-void ntest::assert_uint64(
+bool ntest::assert_uint64(
   uint64_t const expected,
   uint64_t const actual,
   source_location const loc)
 {
-  assert_integral(expected, actual, loc);
+  return assert_integral(expected, actual, loc);
+}
+
+std::string ntest::internal::escape(
+  std::string const &input,
+  special_chars_table_t const &special_chars)
+{
+  std::string out{};
+  out.reserve(input.length());
+
+  for (size_t i = 0; i < input.length(); ++i)
+  {
+    char const ch = input[i];
+    bool is_special = false;
+
+    for (auto const &pair : special_chars)
+    {
+      if (ch == pair.first)
+      {
+        is_special = true;
+        out += '\\';
+        out += pair.second;
+        break;
+      }
+    }
+
+    if (!is_special)
+      out += ch;
+  }
+
+  return out;
+}
+
+static
+void print_escaped_string_to_ostream(
+  char const *const str,
+  size_t const len,
+  std::ostream &os,
+  special_chars_table_t special_chars)
+{
+  for (size_t i = 0; i < len; ++i)
+  {
+    char const ch = str[i];
+    bool is_special = false;
+
+    for (auto const &pair : special_chars)
+    {
+      if (ch == pair.first)
+      {
+        is_special = true;
+        os << '\\' << pair.second;
+        break;
+      }
+    }
+
+    if (!is_special)
+      os << ch;
+  }
 }
 
 static
@@ -276,37 +399,22 @@ void serialize_str_preview(
 
   ss << " <span style='" << ntest::internal::preview_style() << "'>";
   {
-    std::string_view const content(str, std::min(len, max_len));
+    std::string_view const preview_content(str, std::min(len, max_len));
 
-    for (size_t i = 0; i < content.size(); ++i)
-    {
-      char const ch = content[i];
-      bool is_special = false;
-
-      for (auto const &pair : s_special_chars)
-        if (ch == pair.first)
-        {
-          is_special = true;
-          ss << '\\' << pair.second;
-          break;
-        }
-
-      if (!is_special)
-        ss << ch;
-    }
+    print_escaped_string_to_ostream(
+      preview_content.data(), preview_content.size(),
+      ss, ntest::internal::special_chars_markdown_preview());
   }
   ss << "</span>";
 
-  if (len <= max_len)
-    ss << '"';
-  else
+  if (len > max_len)
   {
     size_t const num_hidden_chars = len - max_len;
     ss << " *... " << num_hidden_chars << " more*";
   }
 }
 
-void ntest::assert_cstr(
+bool ntest::assert_cstr(
   char const *const expected,
   char const *const actual,
   ntest::str_opts const &options,
@@ -314,7 +422,7 @@ void ntest::assert_cstr(
 {
   size_t const expected_len = strlen(expected);
   size_t const actual_len = strlen(actual);
-  ntest::assert_cstr(expected, expected_len, actual, actual_len, options, loc);
+  return ntest::assert_cstr(expected, expected_len, actual, actual_len, options, loc);
 }
 
 ntest::str_opts ntest::default_str_opts()
@@ -323,7 +431,7 @@ ntest::str_opts ntest::default_str_opts()
   return s_options;
 }
 
-void ntest::assert_cstr(
+bool ntest::assert_cstr(
   char const *const expected,
   size_t const expected_len,
   char const *const actual,
@@ -337,81 +445,69 @@ void ntest::assert_cstr(
   ;
 
   stringstream serialized_vals{};
-  serialized_vals << "char* | ";
+  serialized_vals << "char*" << '\0';
 
   if (passed)
   {
     serialize_str_preview(expected, expected_len, serialized_vals);
-    internal::register_passed_assertion(std::move(serialized_vals), loc);
+    serialized_vals << '\0';
+    internal::register_passed_assertion(serialized_vals, loc);
   }
   else // failed
   {
     string const
-      expected_pathname = internal::generate_file_pathname(loc, "expected"),
-      actual_pathname = internal::generate_file_pathname(loc, "actual");
+      expected_path = internal::make_serialized_file_path(loc, "expected"),
+      actual_path = internal::make_serialized_file_path(loc, "actual");
 
     auto const write_file = [&options](
-      string const &pathname, char const *str, size_t const len)
+      string const &path, char const *str, size_t const len)
     {
-      fstream file(pathname, std::ios::out);
-      internal::throw_if_file_not_open(file, pathname.c_str());
+      fstream file(path, std::ios::out);
+      internal::throw_if_file_not_open(file, path.c_str());
 
-      if (!options.escape_special_chars)
-      {
+      if (options.escape_special_chars)
+        print_escaped_string_to_ostream(
+          str, len, file, internal::special_chars_serial_file());
+      else
         file << str;
-        return;
-      }
-
-      for (size_t i = 0; i < len; ++i)
-      {
-        char const ch = str[i];
-        bool is_special = false;
-
-        for (auto const &pair : s_special_chars)
-          if (ch == pair.first)
-          {
-            is_special = true;
-            file << '\\' << pair.second;
-            break;
-          }
-
-        if (!is_special)
-          file << ch;
-      }
     };
 
-    write_file(expected_pathname, expected, expected_len);
-    write_file(actual_pathname, actual, actual_len);
+    write_file(expected_path, expected, expected_len);
+    write_file(actual_path, actual, actual_len);
 
     serialized_vals
-      << '[' << expected_pathname << "](" << expected_pathname
-      << ") | [" << actual_pathname << "](" << actual_pathname << ')';
+      << '[' << expected_path << "](" << expected_path << ')' << '\0'
+      << '[' << actual_path << "](" << actual_path << ')' << '\0';
 
     internal::register_failed_assertion(std::move(serialized_vals), loc);
   }
+
+  return passed;
 }
 
-void ntest::assert_stdstr(
+bool ntest::assert_stdstr(
   string const &expected,
   string const &actual,
   str_opts const &options,
   source_location const loc)
 {
-  ntest::assert_cstr(expected.c_str(), expected.size(),
+  return ntest::assert_cstr(expected.c_str(), expected.size(),
     actual.c_str(), actual.size(), options, loc);
 }
 
 static
 string extract_text_file_contents(
-  string const &pathname,
+  string const &path,
   ntest::text_file_opts const &options)
 {
-  fstream file(pathname, std::ios::in);
-  ntest::internal::throw_if_file_not_open(file, pathname.c_str());
+  fstream file(path, std::ios::in);
+  ntest::internal::throw_if_file_not_open(file, path.c_str());
 
-  auto const file_size = fs::file_size(pathname);
+  auto const file_size = fs::file_size(path);
+  assert(file_size <= std::numeric_limits<std::streamsize>::max());
+
   string contents(file_size, '\0');
-  file.read(contents.data(), file_size);
+  file.read(contents.data(), static_cast<std::streamsize>(file_size));
 
   if (options.canonicalize_newlines)
   {
@@ -423,15 +519,17 @@ string extract_text_file_contents(
 }
 
 static
-vector<uint8_t> extract_binary_file_contents(string const &pathname)
+vector<uint8_t> extract_binary_file_contents(string const &path)
 {
-  fstream file(pathname, std::ios::in | std::ios::binary);
-  ntest::internal::throw_if_file_not_open(file, pathname.c_str());
+  fstream file(path, std::ios::in | std::ios::binary);
+  ntest::internal::throw_if_file_not_open(file, path.c_str());
 
-  auto const file_size = fs::file_size(pathname);
+  auto const file_size = fs::file_size(path);
+  assert(file_size <= std::numeric_limits<std::streamsize>::max());
 
   std::vector<uint8_t> vec(file_size);
-  file.read(reinterpret_cast<char *>(vec.data()), file_size);
+
+  file.read(reinterpret_cast<char *>(vec.data()), static_cast<std::streamsize>(file_size));
 
   return vec;
 }
@@ -442,133 +540,125 @@ ntest::text_file_opts ntest::default_text_file_opts()
   return s_options;
 }
 
-void ntest::assert_text_file(
-  char const *const expected_pathname,
-  char const *const actual_pathname,
+bool ntest::assert_text_file(
+  char const *const expected_path,
+  char const *const actual_path,
   text_file_opts const &options,
   source_location const loc)
 {
-  assert_text_file(
-    fs::path(expected_pathname), fs::path(actual_pathname), options, loc);
+  return assert_text_file(
+    fs::path(expected_path), fs::path(actual_path), options, loc);
 }
 
-void ntest::assert_text_file(
-  string const &expected_pathname,
-  string const &actual_pathname,
+bool ntest::assert_text_file(
+  string const &expected_path,
+  string const &actual_path,
   text_file_opts const &options,
   source_location const loc)
 {
-  assert_text_file(
-    fs::path(expected_pathname), fs::path(actual_pathname), options, loc);
+  return assert_text_file(
+    fs::path(expected_path), fs::path(actual_path), options, loc);
 }
 
-void ntest::assert_text_file(
-  fs::path const &expected_pathname,
-  fs::path const &actual_pathname,
+bool ntest::assert_text_file(
+  fs::path const &expected_path,
+  fs::path const &actual_path,
   text_file_opts const &options,
   source_location const loc)
 {
   bool expected_exists, actual_exists;
   {
     std::error_code ec{};
-    expected_exists = fs::is_regular_file(expected_pathname, ec);
-    actual_exists = fs::is_regular_file(actual_pathname, ec);
+    expected_exists = fs::is_regular_file(expected_path, ec);
+    actual_exists = fs::is_regular_file(actual_path, ec);
   }
 
   string const
-    expected_pathname_generic = expected_pathname.generic_string(),
-    actual_pathname_generic = actual_pathname.generic_string();
+    expected_path_generic = expected_path.generic_string(),
+    actual_path_generic = actual_path.generic_string();
 
   string const
     expected = expected_exists
-      ? extract_text_file_contents(expected_pathname_generic, options)
+      ? extract_text_file_contents(expected_path_generic, options)
       : "",
     actual = actual_exists
-      ? extract_text_file_contents(actual_pathname_generic, options)
+      ? extract_text_file_contents(actual_path_generic, options)
       : "";
 
   bool const passed = expected_exists && actual_exists && expected == actual;
 
   stringstream serialized_vals{};
 
-  serialized_vals << "text file | ";
+  serialized_vals << "text file" << '\0';
   if (!expected_exists)
-  {
-    serialized_vals << "<span style='color:red;'>file not found</span>";
-  }
+    serialized_vals << "file not found" << '\0';
   else
-  {
-    serialized_vals
-      << '[' << expected_pathname_generic << "]("
-      << expected_pathname_generic << ')';
-  }
+    serialized_vals << expected_path_generic << '\0';
 
   if (passed)
   {
-    internal::register_passed_assertion(std::move(serialized_vals), loc);
+    internal::register_passed_assertion(serialized_vals, loc);
   }
   else // failed
   {
-    serialized_vals << " | ";
     if (!actual_exists)
-      serialized_vals << "<span style='color:red;'>file not found</span>";
+      serialized_vals << "file not found" << '\0';
     else
-    {
-      serialized_vals
-        << '[' << actual_pathname_generic << "]("
-        << actual_pathname_generic << ')';
-    }
-    internal::register_failed_assertion(std::move(serialized_vals), loc);
+      serialized_vals << actual_path_generic << '\0';
+
+    internal::register_failed_assertion(serialized_vals, loc);
   }
+
+  return passed;
 }
 
-void ntest::assert_binary_file(
-  char const *const expected_pathname,
-  char const *const actual_pathname,
+bool ntest::assert_binary_file(
+  char const *const expected_path,
+  char const *const actual_path,
   source_location const loc)
 {
-  assert_binary_file(
-    fs::path(expected_pathname), fs::path(actual_pathname), loc);
+  return assert_binary_file(
+    fs::path(expected_path), fs::path(actual_path), loc);
 }
 
-void ntest::assert_binary_file(
-  string const &expected_pathname,
-  string const &actual_pathname,
+bool ntest::assert_binary_file(
+  string const &expected_path,
+  string const &actual_path,
   source_location const loc)
 {
-  assert_binary_file(
-    fs::path(expected_pathname), fs::path(actual_pathname), loc);
+  return assert_binary_file(
+    fs::path(expected_path), fs::path(actual_path), loc);
 }
 
-void ntest::assert_binary_file(
-  fs::path const &expected_pathname,
-  fs::path const &actual_pathname,
+bool ntest::assert_binary_file(
+  fs::path const &expected_path,
+  fs::path const &actual_path,
   source_location const loc)
 {
   bool expected_exists, actual_exists;
   {
     std::error_code ec{};
-    expected_exists = fs::is_regular_file(expected_pathname, ec);
-    actual_exists = fs::is_regular_file(actual_pathname, ec);
+    expected_exists = fs::is_regular_file(expected_path, ec);
+    actual_exists = fs::is_regular_file(actual_path, ec);
   }
 
   string const
-    expected_pathname_generic = expected_pathname.generic_string(),
-    actual_pathname_generic = actual_pathname.generic_string();
+    expected_path_generic = expected_path.generic_string(),
+    actual_path_generic = actual_path.generic_string();
 
   vector<uint8_t> const expected = [
-    expected_exists, &expected_pathname_generic]()
+    expected_exists, &expected_path_generic]()
   {
     if (expected_exists)
-      return extract_binary_file_contents(expected_pathname_generic);
+      return extract_binary_file_contents(expected_path_generic);
     else
       return vector<uint8_t>();
   }();
 
-  vector<uint8_t> const actual = [actual_exists, &actual_pathname_generic]()
+  vector<uint8_t> const actual = [actual_exists, &actual_path_generic]()
   {
     if (actual_exists)
-      return extract_binary_file_contents(actual_pathname_generic);
+      return extract_binary_file_contents(actual_path_generic);
     else
       return vector<uint8_t>();
   }();
@@ -579,36 +669,60 @@ void ntest::assert_binary_file(
 
   stringstream serialized_vals{};
 
-  serialized_vals << "binary file | ";
+  serialized_vals << "binary file" << '\0';
+
   if (!expected_exists)
-    serialized_vals << "<span style='color:red;'>file not found</span>";
+    serialized_vals << "file not found" << '\0';
   else
-  {
-    serialized_vals
-      << '[' << expected_pathname_generic << "]("
-      << expected_pathname_generic << ')';
-  }
+    serialized_vals << expected_path_generic << '\0';
 
   if (passed)
   {
-    internal::register_passed_assertion(std::move(serialized_vals), loc);
+    internal::register_passed_assertion(serialized_vals, loc);
   }
   else // failed
   {
-    serialized_vals << " | ";
     if (!actual_exists)
-      serialized_vals << "<span style='color:red;'>file not found</span>";
+      serialized_vals << "file not found" << '\0';
     else
-    {
-      serialized_vals
-        << '[' << actual_pathname_generic << "]("
-        << actual_pathname_generic << ')';
-    }
-    internal::register_failed_assertion(std::move(serialized_vals), loc);
+      serialized_vals << actual_path_generic << '\0';
+
+    internal::register_failed_assertion(serialized_vals, loc);
   }
+
+  return passed;
 }
 
-ntest::report_result ntest::generate_report(char const *const name)
+static
+std::string path_minus_dir_overlap(fs::path subject_abs, fs::path directory_abs)
+{
+  assert(fs::exists(subject_abs));
+  assert(fs::is_regular_file(subject_abs));
+  assert(subject_abs.is_absolute());
+
+  assert(fs::is_directory(directory_abs));
+  assert(directory_abs.is_absolute());
+
+  string subj_str = subject_abs.string();
+  string dir_str = directory_abs.string();
+
+  assert(!subj_str.empty());
+  assert(!dir_str.empty());
+
+  if (!dir_str.ends_with(fs::path::preferred_separator))
+    dir_str.push_back(fs::path::preferred_separator);
+
+  size_t i;
+  for (i = 0; i < dir_str.size() && subj_str[i] == dir_str[i]; ++i);
+
+  char const *const result = subj_str.c_str() + i;
+
+  return std::string(result);
+}
+
+ntest::report_result ntest::generate_report(
+  char const *const name,
+  void (*assertion_callback)(assertion const &, bool))
 {
   size_t const
     total_failed = s_failed_assertions.size(),
@@ -634,25 +748,48 @@ ntest::report_result ntest::generate_report(char const *const name)
 
   auto const print_table_row = [&ofs](assertion const &assertion, bool const passed)
   {
-    auto const &[serialized_vals, loc] = assertion;
-    ofs
-      << "| " << (passed ? "✅" : "❌") << ' ' // Outcome
-      << "| " << serialized_vals << " | " // Type, Expected, [Actual]
-      << loc.function_name() << ':' << loc.line() << ',' << loc.column() // Location
-      << " | " << loc.file_name() << " |\n" // Source File
-      // << " | [" << loc.file_name() << "](" << loc.file_name() << ") |\n" // Source File
-    ;
+    auto const &[type, expected, actual] = assertion.extract_serialized_values(passed);
+    auto const &loc = assertion.loc;
+
+    // Outcome
+    ofs << "| " << (passed ? "✅" : "❌") << ' ';
+
+    // Type
+    ofs << "| " << type << ' ';
+
+    // Expected
+    ofs << "| " << expected << ' ';
+
+    if (!passed)
+    {
+      assert(actual != nullptr);
+      // Actual
+      ofs << "| " << actual << ' ';
+    }
+
+    // Location
+    ofs << "| " << loc.function_name() << ':' << loc.line();
+    if (s_show_column_numbers)
+      ofs << ',' << loc.column();
+    ofs << ' ';
+
+    // Source File
+    ofs << "| " << path_minus_dir_overlap(fs::absolute(loc.file_name()), fs::absolute(fs::current_path())) << " |\n";
   };
 
   if (total_failed > 0)
   {
     ofs
-      << "| | Type | Expected | Actual | Location (fn:ln,col) | Source File |\n"
+      << "| | Type | Expected | Actual | Location (fn:ln[,col]) | Source File |\n"
       << "| - | - | - | - | - | - |\n"
     ;
 
     for (auto const &assertion : s_failed_assertions)
+    {
+      if (assertion_callback != nullptr)
+        assertion_callback(assertion, false);
       print_table_row(assertion, false);
+    }
 
     ofs << '\n';
   }
@@ -665,7 +802,11 @@ ntest::report_result ntest::generate_report(char const *const name)
     ;
 
     for (auto const &assertion : s_passed_assertions)
+    {
+      if (assertion_callback != nullptr)
+        assertion_callback(assertion, true);
       print_table_row(assertion, true);
+    }
 
     ofs << '\n';
   }
@@ -686,13 +827,10 @@ ntest::init_result ntest::init(bool const remove_residual_files)
   if (remove_residual_files)
   {
     // remove any residual .expected and .actual files
-    for (
-      auto const &entry :
-      fs::directory_iterator(
-        current_path,
-        fs::directory_options::skip_permission_denied
-      )
-    )
+    for (auto const &entry : fs::directory_iterator(
+      current_path,
+      fs::directory_options::skip_permission_denied
+    ))
     {
       if (!entry.is_regular_file())
         continue;

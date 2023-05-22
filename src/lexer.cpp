@@ -74,7 +74,7 @@ std::vector<lexer::Token> lexer::tokenize_text(char const *const text, size_t co
 
       case TokenType::LITERAL_CHAR:
       case TokenType::LITERAL_STR: {
-        auto const prevToken = tokens.begin() + (i-1);
+        auto const prevToken = tokens.begin() + ptrdiff_t(i - 1ull);
         bool const isPrefixed =
           prevToken->type() == TokenType::IDENTIFIER &&
           prevToken->length() == 1 &&
@@ -138,6 +138,7 @@ lexer::detail::BroadTokenType lexer::detail::determine_token_broad_type(char con
     case '#':  return BroadTokenType::PREPRO;
     case '.':  return BroadTokenType::OPER_OR_LITERAL_OR_SPECIAL;
     case '/':  return BroadTokenType::OPER_OR_COMMENT;
+    default:   break;
   }
 
   if (firstChar == '_' || util::is_alphabetic(firstChar)) {
@@ -235,12 +236,12 @@ size_t lexer::detail::determine_token_len(
       char const *const firstOpeningMultiLineComment = std::strstr(firstChar, "/*");
       size_t const firstOpeningMultiLineCommentPos =
         firstOpeningMultiLineComment == nullptr
-          ? UINT32_MAX
-          : firstOpeningMultiLineComment - firstChar;
+          ? size_t(UINT32_MAX)
+          : size_t(firstOpeningMultiLineComment - firstChar);
 
       if (firstOpeningMultiLineCommentPos < firstNewlinePos) {
         char const *const commentClose = std::strstr(firstChar, "*/");
-        return commentClose - firstChar + 2;
+        return size_t(commentClose - firstChar) + 2ull;
       } else {
         return firstNewlinePos;
       }
@@ -268,9 +269,9 @@ size_t lexer::detail::determine_token_len(
       ) ++lastChar;
 
       if (*lastChar == 'f' || *lastChar == 'F')
-        return lastChar - firstChar + 1;
+        return size_t(lastChar - firstChar) + 1ull;
       else
-        return lastChar - firstChar;
+        return size_t(lastChar - firstChar);
     }
 
     case BroadTokenType::OPER_OR_COMMENT: {
@@ -290,7 +291,7 @@ size_t lexer::detail::determine_token_len(
               return numCharsRemaining;
             else if (*(firstUnescapedNewline - 1) != '\\')
               // found an unescaped newline
-              return firstUnescapedNewline - firstChar;
+              return size_t(firstUnescapedNewline - firstChar);
             else
               // found a newline, but it's escaped
               ++firstUnescapedNewline;
@@ -377,9 +378,10 @@ size_t lexer::detail::determine_token_len(
           else
             return 1;
         }
-      }
 
-      return 0;
+        default:
+          return 0;
+      }
     }
 
     case BroadTokenType::LITERAL: {

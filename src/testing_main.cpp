@@ -12,11 +12,23 @@
 #include "term.hpp"
 
 int main() {
+  using namespace term;
+  namespace fs = std::filesystem;
+
+  std::printf("std::filesystem::current_path() = %s\n", fs::current_path().string().c_str());
+
   {
     auto const res = ntest::init();
-    std::cout
-      << "ntest: cleaned " << res.num_files_removed << " residual files, "
-      << res.num_files_failed_to_remove << " failed\n";
+    size_t const total = res.num_files_removed + res.num_files_failed_to_remove;
+
+    if (total > 0)
+      printf(FG_MAGENTA, "ntest: ");
+    if (res.num_files_removed)
+      printf(FG_MAGENTA, "%zu residual files removed ", res.num_files_removed);
+    if (res.num_files_failed_to_remove > 0)
+      printf(FG_YELLOW, "(%zu residual files failed to be removed)", res.num_files_failed_to_remove);
+    if (total > 0)
+      std::printf("\n");
   }
 
   using lexer::TokenType;
@@ -142,14 +154,24 @@ int main() {
     ntest::assert_stdvec(expected, actual);
   }
 
+  // report output
   {
-    using namespace term::color;
-    auto const res = ntest::generate_report("Ctruct");
-    if (res.num_fails > 0) {
-      printf(fore::RED, "%zu tests failed\n", res.num_fails);
+    auto const res = ntest::generate_report("fmtcpp", [](ntest::assertion const &a, bool const passed) {
+      if (!passed)
+        util::print_err("failed: %s:%zu", a.loc.file_name(), a.loc.line());
+    });
+
+    if ((res.num_fails + res.num_passes) == 0) {
+      printf(FG_BRIGHT_YELLOW, "No tests defined");
     } else {
-      printf(fore::GREEN, "all %zu tests passed\n", res.num_passes);
+      if (res.num_fails > 0) {
+        printf(FG_BRIGHT_RED,   "%zu failed", res.num_fails);
+        std::printf(" | ");
+        printf(FG_BRIGHT_GREEN, "%zu passed", res.num_passes);
+      } else
+        printf(FG_BRIGHT_GREEN, "All %zu tests passed", res.num_passes);
     }
+    std::printf("\n\n");
   }
 
   return 0;

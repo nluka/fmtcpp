@@ -1,5 +1,6 @@
 .vscode/
 obj/
+bin/
 
 *.obj
 *.exe
@@ -12,4 +13,4 @@ obj/
 # testing stuff
 *.expected
 *.actual
-Ctruct.md
+fmtcpp.md

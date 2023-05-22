@@ -3,7 +3,9 @@
 #include <filesystem>
 #include <iostream>
 #include <utility>
+#include <cassert>
 
+#include "term.hpp"
 #include "util.hpp"
 
 bool util::is_alphabetic(char const c) {
@@ -58,15 +60,7 @@ size_t util::find_unescaped(
       continue;
     }
 
-    size_t const escapeCount = std::count(str, str + pos - 1, escapeCh);
-    // size_t escapeCount = 0;
-    // for (size_t i = pos - 1; i > 0; --i) {
-    //   if (str[i] == escapeCh) {
-    //     ++escapeCount;
-    //   } else {
-    //     break;
-    //   }
-    // }
+    auto const escapeCount = std::count(str, str + pos - 1, escapeCh);
 
     bool const isEscaped = !is_even(escapeCount);
     if (!isEscaped) {
@@ -99,9 +93,14 @@ std::fstream util::open_file(char const *const path, int const flags) {
 
 std::vector<char> util::extract_bin_file_contents(char const *const path) {
   std::fstream file = util::open_file(path, std::ios::binary | std::ios::in);
+
   auto const fileSize = std::filesystem::file_size(path);
+  assert(fileSize <= std::numeric_limits<size_t>::max());
+
   std::vector<char> vec(fileSize);
-  file.read(vec.data(), fileSize);
+
+  file.read(vec.data(), std::streamsize(fileSize));
+
   return vec;
 }
 
@@ -134,4 +133,22 @@ std::string util::make_str(char const *const fmt, ...)
   va_end(args);
 
   return std::string(buffer);
+}
+
+int util::print_err(char const *fmt, ...)
+{
+  using namespace term;
+
+  term::set_font_effects(FG_RED);
+
+  va_list args;
+  va_start(args, fmt);
+  int const retval = vprintf(fmt, args);
+  va_end(args);
+
+  term::reset_font_effects();
+
+  putc('\n', stdout);
+
+  return retval;
 }
