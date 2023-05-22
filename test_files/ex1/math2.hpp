@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 
 typedef float real32;
 typedef double real64;

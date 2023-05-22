@@ -9,6 +9,7 @@ bin/
 *.exp
 *.lib
 *.elf
+*.nodes
 
 # testing stuff
 *.expected

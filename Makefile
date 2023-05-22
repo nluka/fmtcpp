@@ -16,7 +16,10 @@ else
 	$(error BUILD_TYPE $(BUILD_TYPE) not supported)
 endif
 
-LDFLAG = -lstdc++
+LDFLAG = -lstdc++ -lLLVM-14 -lclang
+
+CLANG_INCLUDE = /usr/lib/llvm-14/include
+CLANG_LIB = /usr/lib/llvm-14/lib
 
 # Directories
 SRC_DIR = src
@@ -29,13 +32,13 @@ DEPS = $(OBJS:.o=.d)
 # Rules
 .PHONY: default toolchain clean
 
-core = $(addprefix $(BIN_DIR)/, lexer.o term.o util.o)
+core = $(addprefix $(BIN_DIR)/, lexer.o term.o util.o fmtcpp.o)
 
 default: $(core) $(BIN_DIR)/ntest.o
 	@make tests
 
 tests: $(core) $(BIN_DIR)/ntest.o $(BIN_DIR)/testing_main.o
-	@$(CXX) $(CXXFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAG)
+	@$(CXX) $(CXXFLAGS) -I$(CLANG_INCLUDE) -L$(CLANG_LIB) -o $(BIN_DIR)/$@ $^ $(LDFLAG)
 	@echo 'compiling tests...'
 
 $(BIN_DIR):
@@ -43,7 +46,7 @@ $(BIN_DIR):
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BIN_DIR)
 	@echo 'compiling [$<]...'
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
+	@$(CXX) $(CXXFLAGS) -c $< -o $@ -I$(CLANG_INCLUDE) -L$(CLANG_LIB)
 
 clean:
 	rm -r -f bin/debug bin/release
